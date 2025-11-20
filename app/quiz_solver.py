@@ -10,10 +10,6 @@ from .config import QUIZ_EMAIL, QUIZ_SECRET, MAX_TOTAL_SECONDS
 
 
 async def solve_quiz_chain(start_url: str) -> None:
-    """
-    Visit the given quiz URL, solve it, submit the answer, and
-    follow any chained quiz URLs, all within MAX_TOTAL_SECONDS.
-    """
     start_time = time.time()
     current_url = start_url
 
@@ -25,16 +21,16 @@ async def solve_quiz_chain(start_url: str) -> None:
             while current_url:
                 elapsed = time.time() - start_time
                 if elapsed > MAX_TOTAL_SECONDS:
-                    print(f"[solver] Time budget exceeded ({elapsed:.1f}s). Stopping.")
+                    print(f"[solver] Time limit exceeded ({elapsed:.1f}s). Stopping.")
                     break
 
-                print(f"[solver] Solving quiz at: {current_url}")
+                print(f"[solver] >>> Solving quiz at: {current_url}")
                 await page.goto(current_url, wait_until="networkidle", timeout=60_000)
 
                 answer, submit_url = await solve_single_quiz(page, current_url)
 
                 if submit_url is None:
-                    print("[solver] No submit URL detected; stopping.")
+                    print("[solver] No submit URL found on page; stopping.")
                     break
 
                 payload = {
@@ -43,6 +39,7 @@ async def solve_quiz_chain(start_url: str) -> None:
                     "url": current_url,
                     "answer": answer,
                 }
+                print(f"[solver] Submitting payload to {submit_url}: {payload}")
 
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(submit_url, json=payload)
@@ -50,80 +47,66 @@ async def solve_quiz_chain(start_url: str) -> None:
                     data = resp.json()
 
                 print(f"[solver] Submission result: {data}")
-                # Expected keys: "correct": bool, optionally "url": next_url
                 next_url = data.get("url")
                 if not next_url:
-                    print("[solver] No next URL; quiz sequence complete.")
+                    print("[solver] No next URL in response; quiz sequence complete.")
                     break
 
                 current_url = next_url
+        except Exception as e:
+            print(f"[solver] ERROR during quiz solving: {e!r}")
         finally:
             await browser.close()
 
 
 async def solve_single_quiz(page, quiz_url: str) -> Tuple[object, Optional[str]]:
     """
-    Inspect the page, extract the question + submit URL, compute the answer.
-
-    Returns:
-        (answer, submit_url)
-    - answer: A Python object that will be JSON-serialised (number/string/bool/dict/etc).
-    - submit_url: The endpoint to POST the answer to.
+    TEMP implementation:
+    - Print the page text (for debugging)
+    - Try to detect a submit URL
+    - Return a dummy answer (12345)
     """
-    # 1) Try to find the submit URL in a <meta> or data attribute (you’ll adapt this)
+    # 1) Dump some text so you can see what the quiz looks like
+    try:
+        body_text = await page.inner_text("body")
+        print("[solver] Page text snippet:")
+        print(body_text[:1000])  # first 1000 chars
+    except Exception as e:
+        print(f"[solver] Could not read body text: {e!r}")
+        body_text = ""
+
+    # 2) Try to find a submit URL
     submit_url = None
+
+    # Try meta tag first
     try:
         submit_url = await page.eval_on_selector(
             'meta[name="submit-url"]',
             "el => el.content",
         )
+        if submit_url:
+            print(f"[solver] Found submit URL via <meta>: {submit_url}")
     except Exception:
         pass
 
-    # Fallback: search inside page text for something that looks like JSON with a submit URL
+    # If not found, try to search all links for the word 'submit'
     if not submit_url:
         try:
-            body_text = await page.inner_text("body")
-            # TODO: Improve this logic for real quizzes
-            # Example heuristic: look for "https://" + "submit" etc.
-            import re
-            m = re.search(r'https?://[^\s"]*submit[^\s"]*', body_text)
-            if m:
-                submit_url = m.group(0)
-        except Exception:
-            pass
+            links = await page.eval_on_selector_all(
+                "a",
+                "els => els.map(e => ({ href: e.href, text: e.innerText }))",
+            )
+            for link in links:
+                if "submit" in link["href"].lower():
+                    submit_url = link["href"]
+                    print(f"[solver] Found submit URL via <a>: {submit_url}")
+                    break
+        except Exception as e:
+            print(f"[solver] Error while scanning links: {e!r}")
 
-    # 2) Compute the answer.
-    # You will extend this function to:
-    #   - click "download" links,
-    #   - read CSV/PDF files,
-    #   - clean data,
-    #   - compute aggregates / charts, etc.
-    #
-    # For now, we put a placeholder that you will replace.
+    # 3) TODO: Real logic to compute answer based on the question
+    # For now, just return a dummy number so that the flow works.
+    dummy_answer = 12345
+    print(f"[solver] Using dummy answer: {dummy_answer}")
 
-    answer = await simple_example_answer(page, quiz_url)
-
-    return answer, submit_url
-
-
-async def simple_example_answer(page, quiz_url: str) -> object:
-    """
-    Minimal example of extracting something from a JS-rendered page.
-
-    You’ll completely replace/extend this with:
-      - PDF parsing (via pymupdf),
-      - CSV via pandas,
-      - OCR / vision if needed.
-    """
-    # Example: a div#result holds clear text of the question or answer
-    try:
-        text = await page.inner_text("#result")
-        print(f"[solver] #result text snippet: {text[:200]!r}")
-        # In a real quiz, you'd parse 'text' to compute answer.
-        # Here we just return a dummy.
-        return 12345
-    except Exception:
-        # If nothing obvious, return something safe or raise
-        print("[solver] Could not find #result; returning null answer.")
-        return None
+    return dummy_answer, submit_url
