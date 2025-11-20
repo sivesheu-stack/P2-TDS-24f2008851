@@ -1,6 +1,6 @@
 # Use the official Playwright Python image so all browser deps are preinstalled
 # You can keep this tag or bump it later if needed.
-FROM mcr.microsoft.com/playwright/python:lts-jammy
+FROM mcr.microsoft.com/playwright/python:jammy
 
 # Avoid Python buffering & bytecode files
 ENV PYTHONUNBUFFERED=1 \
