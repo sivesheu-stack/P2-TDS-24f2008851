@@ -1,3 +1,9 @@
+import sys
+import asyncio
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import asyncio
