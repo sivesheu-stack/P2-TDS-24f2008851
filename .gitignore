@@ -1,0 +1,19 @@
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Secrets
+.env
+*.env
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Playwright browsers / temp
+playwright/.local-browsers/
+downloads/
+tmp/
