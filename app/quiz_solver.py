@@ -2,14 +2,15 @@ import time
 import json
 import asyncio
 from typing import Optional, Tuple
-
+import logging
 import httpx
 from playwright.async_api import async_playwright
 
 from .config import QUIZ_EMAIL, QUIZ_SECRET, MAX_TOTAL_SECONDS
 
-
+logger = logging.getLogger("uvicorn.error")
 async def solve_quiz_chain(start_url: str) -> None:
+    logger.info(f"[solver] Starting quiz solving chain for URL: {start_url}")   
     start_time = time.time()
     current_url = start_url
 
@@ -21,16 +22,16 @@ async def solve_quiz_chain(start_url: str) -> None:
             while current_url:
                 elapsed = time.time() - start_time
                 if elapsed > MAX_TOTAL_SECONDS:
-                    print(f"[solver] Time limit exceeded ({elapsed:.1f}s). Stopping.")
+                    logger.info(f"[solver] Time limit exceeded ({elapsed:.1f}s). Stopping.")
                     break
 
-                print(f"[solver] >>> Solving quiz at: {current_url}")
+                logger.info(f"[solver] >>> Solving quiz at: {current_url}")
                 await page.goto(current_url, wait_until="networkidle", timeout=60_000)
 
                 answer, submit_url = await solve_single_quiz(page, current_url)
 
                 if submit_url is None:
-                    print("[solver] No submit URL found on page; stopping.")
+                    logger.info("[solver] No submit URL found on page; stopping.")
                     break
 
                 payload = {
@@ -39,22 +40,22 @@ async def solve_quiz_chain(start_url: str) -> None:
                     "url": current_url,
                     "answer": answer,
                 }
-                print(f"[solver] Submitting payload to {submit_url}: {payload}")
+                logger.info(f"[solver] Submitting payload to {submit_url}: {payload}")
 
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(submit_url, json=payload)
                     resp.raise_for_status()
                     data = resp.json()
 
-                print(f"[solver] Submission result: {data}")
+                logger.info(f"[solver] Submission result: {data}")
                 next_url = data.get("url")
                 if not next_url:
-                    print("[solver] No next URL in response; quiz sequence complete.")
+                    logger.info("[solver] No next URL in response; quiz sequence complete.")
                     break
 
                 current_url = next_url
         except Exception as e:
-            print(f"[solver] ERROR during quiz solving: {e!r}")
+            logger.info(f"[solver] ERROR during quiz solving: {e!r}")
         finally:
             await browser.close()
 
