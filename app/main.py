@@ -72,13 +72,13 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
     )
 
 
-@app.post("/submit", status_code=200)
+@app.post("/quiz", status_code=200)
 async def submit_quiz_endpoint(request_data: QuizRequest):
     """
     Receive the evaluator's POST and queue the task for manual processing.
     Validates the secret. Does NOT auto-solve the quiz chain.
     """
-    logger.info("Received /submit request for email=%s url=%s", request_data.email, request_data.url)
+    logger.info("Received /quiz request for email=%s url=%s", request_data.email, request_data.url)
 
     # Verify secret
     if request_data.secret != QUIZ_SECRET:
